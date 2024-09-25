@@ -1,12 +1,12 @@
 const express = require('express');
-const { createTicket, getPendingTickets, processTicket } = require('../services/dynamoDB');
-const { v4: uuidv4 } = require('uuid');  // For generating unique ticket IDs
+const { createTicket } = require('../services/dynamoDB');
+const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const router = express.Router();
 
-// Middleware to authenticate and authorize users
+// Middleware to authenticate users
 const authenticate = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
@@ -15,55 +15,116 @@ const authenticate = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;  // Attach user info to request
+        console.log(decoded);
+        req.user = decoded;
         next();
     } catch (err) {
         res.status(400).json({ error: 'Invalid token' });
     }
 };
 
-// Manager views all pending tickets
-router.get('/pending', authenticate, async (req, res) => {
-    if (req.user.role !== 'Manager') {
-        return res.status(403).json({ error: 'Access denied. Only managers can view pending tickets.' });
+// Employee submits a new ticket
+router.post('/submit', authenticate, async (req, res) => {
+    const { amount, description } = req.body;
+
+    if (!amount) {
+        return res.status(400).json({ error: 'Amount is required' });
     }
 
+    if (!description) {
+        return res.status(400).json({ error: 'Description is required' });
+    }
+
+    const ticket = {
+        ticketId: uuidv4(),  // Generate a unique ticket ID
+        username: req.user.username,
+        amount,
+        description
+    };
+
     try {
-        const tickets = await getPendingTickets();
-        res.status(200).json(tickets);
+        await createTicket(ticket);
+        res.status(201).json({ message: 'Ticket submitted successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Error submitting ticket' });
+    }
+});
+
+// View pending tickets
+router.get('/tickets/pending', authenticate, async (req, res) => {
+    try {
+        const pendingTickets = await getPendingTickets(req.user.username);
+        res.status(200).json(pendingTickets);
     } catch (error) {
         res.status(500).json({ error: 'Error retrieving pending tickets' });
     }
 });
 
-// Manager processes (approve/deny) a ticket
-router.put('/process/:id', authenticate, async (req, res) => {
-    if (req.user.role !== 'Manager') {
-        return res.status(403).json({ error: 'Access denied. Only managers can process tickets.' });
-    }
+// Employee process attempt
+router.put('/tickets/attempt-process', authenticate, async (req, res) => {
+    const { ticketId } = req.body;
 
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!['Approved', 'Denied'].includes(status)) {
-        return res.status(400).json({ error: 'Invalid status. Must be either "Approved" or "Denied".' });
+    if (!ticketId) {
+        return res.status(400).json({ error: 'Ticket ID is required' });
     }
 
     try {
-        await processTicket(id, status);
-        res.status(200).json({ message: `Ticket ${id} ${status}` });
+        const result = await attemptProcessTicket(ticketId, req.user.username);
+        res.status(200).json(result);
     } catch (error) {
-        res.status(500).json({ error: 'Error processing ticket' });
+        res.status(500).json({ error: 'Error attempting to process the ticket' });
     }
 });
 
-// Employee views their submitted tickets
-router.get('/history', authenticate, async (req, res) => {
+// Approve ticket
+router.put('/tickets/approve', authenticate, async (req, res) => {
+    const { ticketId } = req.body;
+
+    if (!ticketId) {
+        return res.status(400).json({ error: 'Ticket ID is required' });
+    }
+
     try {
-        const tickets = await getTicketsByUsername(req.user.username);
-        res.status(200).json(tickets);
+        const result = await approveTicket(ticketId, req.user.username);
+        res.status(200).json(result);
     } catch (error) {
-        res.status(500).json({ error: 'Error retrieving tickets' });
+        res.status(500).json({ error: 'Error approving the ticket' });
+    }
+});
+
+// Deny ticket
+router.put('/tickets/deny', authenticate, async (req, res) => {
+    const { ticketId } = req.body;
+
+    if (!ticketId) {
+        return res.status(400).json({ error: 'Ticket ID is required' });
+    }
+
+    try {
+        const result = await denyTicket(ticketId, req.user.username);
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ error: 'Error denying the ticket' });
+    }
+});
+
+// View previous tickets
+router.get('/tickets/previous', authenticate, async (req, res) => {
+    try {
+        const previousTickets = await getPreviousTickets(req.user.username);
+        res.status(200).json(previousTickets);
+    } catch (error) {
+        res.status(500).json({ error: 'Error retrieving previous tickets' });
+    }
+});
+
+// View previous submissions
+router.get('/tickets/submissions', authenticate, async (req, res) => {
+    try {
+        const previousSubmissions = await getPreviousSubmissions(req.user.username);
+        res.status(200).json(previousSubmissions);
+    } catch (error) {
+        res.status(500).json({ error: 'Error retrieving previous submissions' });
     }
 });
 
