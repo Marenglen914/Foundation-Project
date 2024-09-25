@@ -4,14 +4,22 @@ const jwt = require('jsonwebtoken');
 const { createUser, getUserByUsername } = require('../services/dynamoDB');
 require('dotenv').config();
 
-const router = express.Router();
+const router = express.Router();  // Initialize the router
 
 // Register a new user
 router.post('/register', async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, role } = req.body;
 
     if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (!role) {
+        return res.status(400).json({ error: 'Role is required' });
+    }
+
+    if (role !== 'Employee' && role !== 'Manager') {
+        return res.status(400).json({ error: 'Invalid role specified' });
     }
 
     try {
@@ -24,11 +32,11 @@ router.post('/register', async (req, res) => {
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create a new user with the role 'Employee'
+        // Create a new user
         const user = {
             username,
             password: hashedPassword,
-            role: 'Employee'
+            role
         };
 
         await createUser(user);
@@ -64,7 +72,7 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign(
             { username: user.username, role: user.role },
             process.env.JWT_SECRET,
-            { expiresIn: '2h' }
+            { expiresIn: '24h' }
         );
 
         res.status(200).json({ token, message: 'Login successful' });
@@ -73,4 +81,4 @@ router.post('/login', async (req, res) => {
     }
 });
 
-module.exports = router;
+module.exports = router;  // Export the router

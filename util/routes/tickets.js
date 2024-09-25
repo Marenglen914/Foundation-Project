@@ -1,7 +1,12 @@
 const express = require('express');
-const { createTicket } = require('../services/dynamoDB');
+const {
+    createTicket, getPendingTickets, attemptProcessTicket,
+    approveTicket, denyTicket, getPreviousTickets, getPreviousSubmissions
+} = require('../services/dynamoDB');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
+const authorizeRole = require('../middleware/authorizeRole');
+
 require('dotenv').config();
 
 const router = express.Router();
@@ -39,7 +44,9 @@ router.post('/submit', authenticate, async (req, res) => {
         ticketId: uuidv4(),  // Generate a unique ticket ID
         username: req.user.username,
         amount,
-        description
+        description,
+        status: 'Pending',  // Adding default status
+        createdAt: new Date().toISOString()
     };
 
     try {
@@ -51,7 +58,7 @@ router.post('/submit', authenticate, async (req, res) => {
 });
 
 // View pending tickets
-router.get('/tickets/pending', authenticate, async (req, res) => {
+router.get('/pending', authenticate, async (req, res) => {
     try {
         const pendingTickets = await getPendingTickets(req.user.username);
         res.status(200).json(pendingTickets);
@@ -61,7 +68,7 @@ router.get('/tickets/pending', authenticate, async (req, res) => {
 });
 
 // Employee process attempt
-router.put('/tickets/attempt-process', authenticate, async (req, res) => {
+router.put('/attempt-process', authenticate, async (req, res) => {
     const { ticketId } = req.body;
 
     if (!ticketId) {
@@ -76,8 +83,8 @@ router.put('/tickets/attempt-process', authenticate, async (req, res) => {
     }
 });
 
-// Approve ticket
-router.put('/tickets/approve', authenticate, async (req, res) => {
+// Approve ticket (only Managers)
+router.put('/approve', authenticate, authorizeRole(['Manager']), async (req, res) => {
     const { ticketId } = req.body;
 
     if (!ticketId) {
@@ -92,8 +99,8 @@ router.put('/tickets/approve', authenticate, async (req, res) => {
     }
 });
 
-// Deny ticket
-router.put('/tickets/deny', authenticate, async (req, res) => {
+// Deny ticket (only Managers)
+router.put('/deny', authenticate, authorizeRole(['Manager']), async (req, res) => {
     const { ticketId } = req.body;
 
     if (!ticketId) {
@@ -109,7 +116,7 @@ router.put('/tickets/deny', authenticate, async (req, res) => {
 });
 
 // View previous tickets
-router.get('/tickets/previous', authenticate, async (req, res) => {
+router.get('/previous', authenticate, async (req, res) => {
     try {
         const previousTickets = await getPreviousTickets(req.user.username);
         res.status(200).json(previousTickets);
@@ -119,7 +126,7 @@ router.get('/tickets/previous', authenticate, async (req, res) => {
 });
 
 // View previous submissions
-router.get('/tickets/submissions', authenticate, async (req, res) => {
+router.get('/submissions', authenticate, async (req, res) => {
     try {
         const previousSubmissions = await getPreviousSubmissions(req.user.username);
         res.status(200).json(previousSubmissions);
@@ -129,3 +136,5 @@ router.get('/tickets/submissions', authenticate, async (req, res) => {
 });
 
 module.exports = router;
+
+

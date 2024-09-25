@@ -90,6 +90,8 @@ const getPendingTickets = async () => {
 
 // Process (approve/deny) a ticket
 const processTicket = async (ticketId, status) => {
+    console.log(`Processing ticket with ID: ${ticketId} to status: ${status}`);
+
     const params = {
         TableName: 'Tickets',
         Key: {
@@ -102,20 +104,21 @@ const processTicket = async (ticketId, status) => {
         ExpressionAttributeValues: {
             ':statusVal': status
         },
-        ConditionExpression: '#status = :pendingVal',  // Ensure the ticket is still pending
-        ExpressionAttributeValues: {
-            ':pendingVal': 'Pending'
-        }
+        ReturnValues: 'ALL_NEW'
     };
 
     try {
-        await ddbDocClient.send(new UpdateCommand(params));
-        console.log(`Ticket ${ticketId} processed as ${status}`);
+        const result = await ddbDocClient.send(new UpdateCommand(params));
+        console.log(`Ticket ${ticketId} processed as ${status}`, result);
+        return result.Attributes;
     } catch (err) {
-        console.error('Error processing ticket:', err);
-        throw new Error('Could not process ticket in DynamoDB');
+        console.error('Error processing ticket:', err.name, err.message, err.stack);
+        throw new Error(`Could not process ticket in DynamoDB: ${err.message}`);
     }
 };
+
+
+
 
 // Get tickets by username (for viewing submitted tickets)
 const getTicketsByUsername = async (username) => {
