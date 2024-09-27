@@ -117,9 +117,6 @@ const processTicket = async (ticketId, status) => {
     }
 };
 
-
-
-
 // Get tickets by username (for viewing submitted tickets)
 const getTicketsByUsername = async (username) => {
     const params = {
@@ -139,5 +136,74 @@ const getTicketsByUsername = async (username) => {
     }
 };
 
+const attemptProcessTicket = async (ticketId, username) => {
+    console.log(`Attempting to process ticket with ID: ${ticketId} by user: ${username}`);
+
+    const params = {
+        TableName: 'Tickets',
+        Key: {
+            ticketId: ticketId
+        },
+        UpdateExpression: 'SET #attemptedBy = :username',
+        ExpressionAttributeNames: {
+            '#attemptedBy': 'attemptedBy'
+        },
+        ExpressionAttributeValues: {
+            ':username': username
+        },
+        ReturnValues: 'ALL_NEW'
+    };
+
+    try {
+        const result = await ddbDocClient.send(new UpdateCommand(params));
+        console.log(`Ticket ${ticketId} attempted to process by ${username}`, result);
+        return result.Attributes;
+    } catch (err) {
+        console.error('Error attempting to process ticket:', err.name, err.message, err.stack);
+        throw new Error(`Could not attempt to process ticket in DynamoDB: ${err.message}`);
+    }
+};
+
+const getPreviousTickets = async (username) => {
+    const params = {
+        TableName: 'Tickets',
+        FilterExpression: 'username = :usernameVal AND #status <> :statusVal',
+        ExpressionAttributeNames: {
+            '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+            ':usernameVal': username,
+            ':statusVal': 'Pending'
+        }
+    };
+
+    try {
+        const data = await ddbDocClient.send(new ScanCommand(params));
+        return data.Items;
+    } catch (err) {
+        console.error('Error getting previous tickets:', err);
+        throw new Error('Could not retrieve previous tickets from DynamoDB');
+    }
+};
+
+const getPreviousSubmissions = async (username) => {
+    const params = {
+        TableName: 'Tickets',
+        FilterExpression: 'username = :usernameVal',
+        ExpressionAttributeValues: {
+            ':usernameVal': username
+        }
+    };
+
+    try {
+        const data = await ddbDocClient.send(new ScanCommand(params));
+        return data.Items;
+    } catch (err) {
+        console.error('Error getting previous submissions:', err);
+        throw new Error('Could not retrieve previous submissions from DynamoDB');
+    }
+};
+
+
 // Export all the functions for use in other files
-module.exports = { createUser, getUserByUsername, createTicket, getPendingTickets, processTicket, getTicketsByUsername };
+module.exports = { createUser, getUserByUsername, createTicket, getPendingTickets, processTicket, getTicketsByUsername, attemptProcessTicket, getPreviousTickets, getPreviousSubmissions };

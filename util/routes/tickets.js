@@ -1,7 +1,8 @@
 const express = require('express');
 const {
     createTicket, getPendingTickets, attemptProcessTicket,
-    approveTicket, denyTicket, getPreviousTickets, getPreviousSubmissions
+    getPreviousTickets, getPreviousSubmissions,
+    processTicket
 } = require('../services/dynamoDB');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
@@ -92,7 +93,8 @@ router.put('/approve', authenticate, authorizeRole(['Manager']), async (req, res
     }
 
     try {
-        const result = await approveTicket(ticketId, req.user.username);
+       //  const result = await approveTicket(ticketId, req.user.username);
+       const result = await processTicket(ticketId,"Approved");
         res.status(200).json(result);
     } catch (error) {
         res.status(500).json({ error: 'Error approving the ticket' });
@@ -108,7 +110,8 @@ router.put('/deny', authenticate, authorizeRole(['Manager']), async (req, res) =
     }
 
     try {
-        const result = await denyTicket(ticketId, req.user.username);
+        //const result = await denyTicket(ticketId, req.user.username);
+        const result = await processTicket(ticketId,"Deny");
         res.status(200).json(result);
     } catch (error) {
         res.status(500).json({ error: 'Error denying the ticket' });
